@@ -1,0 +1,35 @@
+# =========================================
+# Machine Learning
+# =========================================
+
+# Python environment
+.venv/
+
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Dataset
+data/
+
+# Training outputs
+runs/
+outputs/
+
+# Trained models
+models/
+*.pt
+*.onnx
+*.engine
+
+# Environment variables
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
