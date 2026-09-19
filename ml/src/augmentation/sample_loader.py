@@ -31,9 +31,9 @@ def build_train_augmentation() -> A.Compose:
             ),
 
             A.Rotate(
-              limit=10,
-              border_mode=cv2.BORDER_CONSTANT,
-              p=0.4,
+                limit=10,
+                border_mode=cv2.BORDER_REFLECT_101,
+                p=0.4,
             ),
 
             A.RandomBrightnessContrast(
