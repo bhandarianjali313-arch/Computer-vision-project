@@ -215,3 +215,46 @@ def test_augmentation_keeps_coordinates_valid():
             < height
             <= 1.0
         )
+
+def test_save_annotations_removes_duplicates(
+    tmp_path: Path,
+):
+    output_path = (
+        tmp_path / "duplicate_test.txt"
+    )
+
+    save_yolo_annotations(
+        output_path=output_path,
+        bboxes=[
+            [
+                0.5,
+                0.5,
+                0.25,
+                0.30,
+            ],
+            [
+                0.5,
+                0.5,
+                0.25,
+                0.30,
+            ],
+        ],
+        class_labels=[
+            2,
+            2,
+        ],
+    )
+
+    lines = output_path.read_text(
+        encoding="utf-8"
+    ).splitlines()
+
+    assert len(lines) == 1
+
+    assert lines[0] == (
+        "2 "
+        "0.500000 "
+        "0.500000 "
+        "0.250000 "
+        "0.300000"
+    )

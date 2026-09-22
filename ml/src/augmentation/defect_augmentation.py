@@ -139,6 +139,8 @@ def load_yolo_annotations(
     return bboxes, class_labels
 
 
+
+
 def save_yolo_annotations(
     output_path: Path,
     bboxes: list,
@@ -146,6 +148,10 @@ def save_yolo_annotations(
 ) -> None:
     """
     Save augmented annotations in YOLO format.
+
+    Exact duplicate boxes are removed so that the
+    same physical object is not written twice after
+    augmentation.
     """
 
     if len(bboxes) != len(class_labels):
@@ -156,6 +162,9 @@ def save_yolo_annotations(
 
     lines = []
 
+    # Used to prevent exact duplicate YOLO annotations.
+    seen_annotations = set()
+
     for class_id, bbox in zip(
         class_labels,
         bboxes,
@@ -165,15 +174,38 @@ def save_yolo_annotations(
         width = float(bbox[2])
         height = float(bbox[3])
 
+        # Use the same precision that will be written
+        # to the YOLO label file.
+        annotation_key = (
+            int(class_id),
+            round(x_center, 6),
+            round(y_center, 6),
+            round(width, 6),
+            round(height, 6),
+        )
+
+        if annotation_key in seen_annotations:
+            continue
+
+        seen_annotations.add(
+            annotation_key
+        )
+
         line = (
-            f"{int(class_id)} "
-            f"{x_center:.6f} "
-            f"{y_center:.6f} "
-            f"{width:.6f} "
-            f"{height:.6f}"
+            f"{annotation_key[0]} "
+            f"{annotation_key[1]:.6f} "
+            f"{annotation_key[2]:.6f} "
+            f"{annotation_key[3]:.6f} "
+            f"{annotation_key[4]:.6f}"
         )
 
         lines.append(line)
+
+    if not lines:
+        raise ValueError(
+            f"Augmentation produced no valid "
+            f"annotations for {output_path}"
+        )
 
     output_path.parent.mkdir(
         parents=True,
