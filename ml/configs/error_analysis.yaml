@@ -1,0 +1,6 @@
+analysis:
+  confidence_threshold: 0.25
+  match_iou_threshold: 0.50
+  imgsz: 320
+  max_error_previews: 24
+  seed: 42
