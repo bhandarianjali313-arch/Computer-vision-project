@@ -1,0 +1,7 @@
+evaluation:
+  imgsz: 320
+  batch: 16
+  workers: 0
+  plots: false
+  verbose: true
+  save_json: false
