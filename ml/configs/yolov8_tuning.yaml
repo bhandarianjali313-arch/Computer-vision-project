@@ -1,0 +1,42 @@
+screening:
+  epochs: 10
+  fraction: 0.25
+  patience: 4
+  workers: 0
+  seed: 42
+  deterministic: true
+  pretrained: true
+  optimizer: auto
+  verbose: true
+  plots: false
+  save: true
+
+augmentation:
+  hsv_h: 0.0
+  hsv_s: 0.0
+  hsv_v: 0.0
+  degrees: 0.0
+  translate: 0.0
+  scale: 0.0
+  shear: 0.0
+  perspective: 0.0
+  flipud: 0.0
+  fliplr: 0.0
+  mosaic: 0.0
+  mixup: 0.0
+
+candidates:
+  - name: nano_320_control
+    model: yolov8n.pt
+    imgsz: 320
+    batch: 16
+
+  - name: nano_416_resolution
+    model: yolov8n.pt
+    imgsz: 416
+    batch: 8
+
+  - name: small_320_capacity
+    model: yolov8s.pt
+    imgsz: 320
+    batch: 8
