@@ -1,0 +1,13 @@
+comparison:
+  baseline_imgsz: 320
+
+  validation:
+    batch: 8
+    workers: 0
+    plots: false
+    verbose: false
+
+  benchmark:
+    confidence: 0.25
+    sample_count: 30
+    warmup_count: 3
