@@ -1,0 +1,12 @@
+video_inference:
+  imgsz: 416
+  confidence_threshold: 0.25
+  iou_threshold: 0.45
+  max_detections: 100
+
+  fps_window: 30
+  fallback_output_fps: 20.0
+
+  show_frame_number: true
+  show_detection_count: true
+  show_fps: true
