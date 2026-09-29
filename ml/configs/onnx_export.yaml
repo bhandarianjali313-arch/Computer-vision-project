@@ -1,0 +1,15 @@
+export:
+  imgsz: 416
+  batch: 1
+  opset: 12
+  dynamic: false
+  simplify: true
+  half: false
+
+parity:
+  confidence_threshold: 0.25
+  iou_threshold: 0.45
+  sample_count: 10
+  match_iou_threshold: 0.90
+  confidence_tolerance: 0.05
+  minimum_match_rate: 0.95
