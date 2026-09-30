@@ -1,0 +1,16 @@
+runtime:
+  imgsz: 416
+  confidence_threshold: 0.25
+  iou_threshold: 0.45
+  max_detections: 100
+  provider: CPUExecutionProvider
+
+benchmark:
+  sample_count: 50
+  warmup_count: 5
+
+parity:
+  sample_count: 10
+  match_iou_threshold: 0.85
+  confidence_tolerance: 0.05
+  minimum_match_rate: 0.90
