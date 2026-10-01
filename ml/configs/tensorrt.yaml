@@ -1,0 +1,17 @@
+tensorrt:
+  input_name: images
+  batch_size: 1
+  channels: 3
+  height: 416
+  width: 416
+
+  precision: fp16
+
+  onnx_model: models/onnx/yolo_neu_optimized.onnx
+  engine_path: models/tensorrt/yolo_neu_optimized_fp16.engine
+
+  metadata_path: outputs/optimization/day19_tensorrt_metadata.json
+
+fallback:
+  backend: onnxruntime
+  provider: CPUExecutionProvider
