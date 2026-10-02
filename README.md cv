@@ -1,0 +1,48 @@
+# Real-Time Industrial Defect Detection System
+
+A computer vision system for detecting industrial surface defects using YOLO, OpenCV and FastAPI.
+
+## Project Pipeline
+
+Camera / Image
+        ↓
+FastAPI Backend
+        ↓
+OpenCV Processing
+        ↓
+YOLO Detection Model
+        ↓
+Defect Classification
+        ↓
+Bounding Boxes + Confidence
+        ↓
+Dashboard / Sorting System
+
+## Technologies
+
+- Python
+- FastAPI
+- YOLO
+- Ultralytics
+- OpenCV
+- NumPy
+- Prometheus
+- Docker
+
+## Supported Defect Types
+
+The project can be trained for six NEU-style surface defects:
+
+1. Crazing
+2. Inclusion
+3. Patches
+4. Pitted Surface
+5. Rolled-in Scale
+6. Scratches
+
+## Installation
+
+Clone the repository:
+
+```bash
+git clone https://github.com/YOUR_USERNAME/industrial-defect-detection.git
