@@ -1,40 +1,58 @@
-from pathlib import Path
-import time
 import uuid
 
-import cv2
-import numpy as np
+from fastapi import (
+    FastAPI,
+    File,
+    HTTPException,
+    UploadFile,
+)
 
-from fastapi import FastAPI, File, UploadFile, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.middleware.cors import (
+    CORSMiddleware,
+)
+
+from fastapi.responses import (
+    Response,
+)
 
 from prometheus_client import (
+    CONTENT_TYPE_LATEST,
     Counter,
     Histogram,
     generate_latest,
-    CONTENT_TYPE_LATEST
 )
 
-from ultralytics import YOLO
+from app.config import (
+    IMAGE_SIZE,
+    INFERENCE_DEVICE,
+    MAX_IMAGE_SIZE_MB,
+    MODEL_PATH,
+    PROJECT_NAME,
+    VERSION,
+)
+
+from app.detector import (
+    DefectDetector,
+)
+
+from app.utils import (
+    decode_image,
+    encode_jpeg,
+)
 
 
 # =========================================================
-# PROJECT PATHS
-# =========================================================
-
-BASE_DIR = Path(__file__).resolve().parent.parent
-MODEL_PATH = BASE_DIR / "models" / "best.pt"
-
-
-# =========================================================
-# FASTAPI APPLICATION
+# APPLICATION
 # =========================================================
 
 app = FastAPI(
-    title="Real-Time Industrial Defect Detection API",
-    version="1.0.0",
-    description="YOLO-based industrial surface defect detection backend"
+    title=PROJECT_NAME,
+    version=VERSION,
+    description=(
+        "Real-time industrial surface "
+        "defect detection and operational "
+        "quality triage API."
+    ),
 )
 
 
@@ -44,10 +62,16 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=[
+        "*"
+    ],
+    allow_credentials=False,
+    allow_methods=[
+        "*"
+    ],
+    allow_headers=[
+        "*"
+    ],
 )
 
 
@@ -58,387 +82,595 @@ app.add_middleware(
 REQUESTS = Counter(
     "defect_api_requests_total",
     "Total number of API requests",
-    ["endpoint"]
+    [
+        "endpoint"
+    ],
 )
 
 INFERENCES = Counter(
     "defect_inferences_total",
-    "Total number of inference calls"
+    "Total inference operations",
 )
 
 INFERENCE_TIME = Histogram(
     "defect_inference_seconds",
-    "Inference execution time"
+    "YOLO inference execution time",
 )
 
 DETECTIONS = Counter(
     "defect_detections_total",
-    "Total detected defects",
-    ["class_name"]
+    "Detected defects after quality processing",
+    [
+        "class_name"
+    ],
+)
+
+QUALITY_DECISIONS = Counter(
+    "defect_quality_decisions_total",
+    "Operational quality decisions",
+    [
+        "decision"
+    ],
 )
 
 
 # =========================================================
-# MODEL
+# DETECTOR
 # =========================================================
 
-model = None
+detector = None
 
 
-@app.on_event("startup")
-def load_model():
+@app.on_event(
+    "startup"
+)
+def startup_event():
+    """
+    Load one shared model instance when
+    the FastAPI service starts.
+    """
 
-    global model
+    global detector
 
-    if MODEL_PATH.exists():
+    detector = (
+        DefectDetector()
+    )
 
-        model = YOLO(str(MODEL_PATH))
 
-        print("YOLO model loaded successfully.")
-        print(f"Model path: {MODEL_PATH}")
+def get_detector(
+) -> DefectDetector:
+    """
+    Return the shared detector or produce
+    HTTP 503 when model weights are missing.
+    """
 
-    else:
+    if (
+        detector is None
+        or not detector.is_ready()
+    ):
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Optimized defect detector "
+                "is not available. "
+                f"Expected model: "
+                f"{MODEL_PATH}"
+            ),
+        )
 
-        model = None
+    return detector
 
-        print("WARNING: best.pt not found.")
-        print("Place your trained model at:")
-        print(MODEL_PATH)
+
+# =========================================================
+# UPLOAD VALIDATION
+# =========================================================
+
+async def read_uploaded_image(
+    file: UploadFile,
+):
+    """
+    Validate and decode an uploaded image.
+    """
+
+    if (
+        not file.content_type
+        or not file.content_type.startswith(
+            "image/"
+        )
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Please upload an "
+                "image file."
+            ),
+        )
+
+    image_bytes = (
+        await file.read()
+    )
+
+    maximum_bytes = (
+        MAX_IMAGE_SIZE_MB
+        * 1024
+        * 1024
+    )
+
+    if len(
+        image_bytes
+    ) > maximum_bytes:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                "Image exceeds the "
+                f"{MAX_IMAGE_SIZE_MB} MB "
+                "upload limit."
+            ),
+        )
+
+    try:
+        image = decode_image(
+            image_bytes
+        )
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=400,
+            detail=str(
+                error
+            ),
+        ) from error
+
+    return image
+
+
+def validate_confidence(
+    confidence: float,
+) -> float:
+    try:
+        return (
+            DefectDetector
+            .validate_confidence(
+                confidence
+            )
+        )
+
+    except ValueError as error:
+        raise HTTPException(
+            status_code=422,
+            detail=str(
+                error
+            ),
+        ) from error
+
+
+# =========================================================
+# RESPONSE BUILDER
+# =========================================================
+
+def build_prediction_payload(
+    filename: str | None,
+    image,
+    result: dict,
+) -> dict:
+    """
+    Convert detector output into the
+    public API response format.
+    """
+
+    height, width = (
+        image.shape[:2]
+    )
+
+    quality = result[
+        "quality"
+    ]
+
+    return {
+        "request_id":
+            str(
+                uuid.uuid4()
+            ),
+
+        "filename":
+            filename,
+
+        "model": {
+            "image_size":
+                IMAGE_SIZE,
+
+            "device":
+                INFERENCE_DEVICE,
+        },
+
+        "image": {
+            "width":
+                int(
+                    width
+                ),
+
+            "height":
+                int(
+                    height
+                ),
+        },
+
+        "inference_time_ms":
+            result[
+                "inference_time_ms"
+            ],
+
+        "raw_detection_count":
+            result[
+                "detection_count"
+            ],
+
+        "detection_count":
+            quality[
+                "final_detection_count"
+            ],
+
+        "quality_decision":
+            quality[
+                "decision"
+            ],
+
+        "decision_reasons":
+            quality[
+                "decision_reasons"
+            ],
+
+        "triage_counts":
+            quality[
+                "triage_counts"
+            ],
+
+        "detections":
+            quality[
+                "detections"
+            ],
+
+        "policy_note":
+            quality[
+                "policy_note"
+            ],
+    }
+
+
+def record_inference_metrics(
+    result: dict,
+) -> None:
+    """
+    Update Prometheus metrics from a
+    completed inference result.
+    """
+
+    INFERENCES.inc()
+
+    INFERENCE_TIME.observe(
+        result[
+            "inference_time_ms"
+        ]
+        / 1000.0
+    )
+
+    quality = result[
+        "quality"
+    ]
+
+    QUALITY_DECISIONS.labels(
+        quality[
+            "decision"
+        ]
+    ).inc()
+
+    for detection in quality[
+        "detections"
+    ]:
+        DETECTIONS.labels(
+            detection[
+                "class_name"
+            ]
+        ).inc()
 
 
 # =========================================================
 # ROOT
 # =========================================================
 
-@app.get("/")
+@app.get(
+    "/"
+)
 def root():
 
+    ready = (
+        detector is not None
+        and detector.is_ready()
+    )
+
     return {
-        "project": "Real-Time Industrial Defect Detection System",
-        "status": "running",
-        "model_loaded": model is not None,
-        "documentation": "/docs"
+        "project":
+            PROJECT_NAME,
+
+        "version":
+            VERSION,
+
+        "status":
+            "running",
+
+        "model_loaded":
+            ready,
+
+        "documentation":
+            "/docs",
     }
 
 
 # =========================================================
-# HEALTH CHECK
+# HEALTH
 # =========================================================
 
-@app.get("/health")
+@app.get(
+    "/health"
+)
 def health():
 
-    REQUESTS.labels("/health").inc()
+    REQUESTS.labels(
+        "/health"
+    ).inc()
+
+    ready = (
+        detector is not None
+        and detector.is_ready()
+    )
 
     return {
-        "status": "ok",
-        "model_loaded": model is not None,
-        "model_path": str(MODEL_PATH)
+        "status":
+            (
+                "ok"
+                if ready
+                else "degraded"
+            ),
+
+        "model_loaded":
+            ready,
+
+        "model_path":
+            str(
+                MODEL_PATH
+            ),
+
+        "image_size":
+            IMAGE_SIZE,
+
+        "device":
+            INFERENCE_DEVICE,
     }
 
 
 # =========================================================
-# MODEL CLASSES
+# CLASSES
 # =========================================================
 
-@app.get("/classes")
+@app.get(
+    "/classes"
+)
 def get_classes():
 
-    REQUESTS.labels("/classes").inc()
+    REQUESTS.labels(
+        "/classes"
+    ).inc()
 
-    if model is None:
+    service = (
+        get_detector()
+    )
 
-        return {
-            "classes": [],
-            "message": "Model is not loaded."
+    names = (
+        service.get_classes()
+    )
+
+    if isinstance(
+        names,
+        dict,
+    ):
+        classes = {
+            int(
+                class_id
+            ):
+                class_name
+
+            for (
+                class_id,
+                class_name,
+            ) in names.items()
         }
 
-    names = model.names
+    else:
+        classes = {
+            index:
+                class_name
+
+            for (
+                index,
+                class_name,
+            ) in enumerate(
+                names
+            )
+        }
 
     return {
-        "classes": {
-            int(class_id): class_name
-            for class_id, class_name in names.items()
-        }
+        "classes":
+            classes
     }
 
 
 # =========================================================
-# INFERENCE FUNCTION
+# PREDICT JSON
 # =========================================================
 
-def run_inference(
-    image: np.ndarray,
-    confidence: float = 0.25
+@app.post(
+    "/predict"
+)
+async def predict(
+    file: UploadFile = File(
+        ...
+    ),
+    confidence: float = 0.25,
 ):
 
-    if model is None:
+    REQUESTS.labels(
+        "/predict"
+    ).inc()
 
+    confidence = (
+        validate_confidence(
+            confidence
+        )
+    )
+
+    image = (
+        await read_uploaded_image(
+            file
+        )
+    )
+
+    service = (
+        get_detector()
+    )
+
+    try:
+        result = (
+            service
+            .detect_with_quality(
+                image=image,
+                confidence=confidence,
+            )
+        )
+
+    except RuntimeError as error:
         raise HTTPException(
             status_code=503,
-            detail=(
-                "YOLO model is not loaded. "
-                "Place trained best.pt inside models/"
-            )
-        )
+            detail=str(
+                error
+            ),
+        ) from error
 
-    INFERENCES.inc()
-
-    start_time = time.perf_counter()
-
-    results = model.predict(
-        source=image,
-        conf=confidence,
-        verbose=False
+    record_inference_metrics(
+        result
     )
 
-    elapsed_time = time.perf_counter() - start_time
-
-    INFERENCE_TIME.observe(elapsed_time)
-
-    result = results[0]
-
-    detections = []
-
-    if result.boxes is not None:
-
-        for box in result.boxes:
-
-            class_id = int(box.cls.item())
-
-            score = float(box.conf.item())
-
-            x1, y1, x2, y2 = [
-                float(value)
-                for value in box.xyxy[0].tolist()
-            ]
-
-            class_name = result.names.get(
-                class_id,
-                str(class_id)
-            )
-
-            DETECTIONS.labels(class_name).inc()
-
-            detections.append({
-
-                "class_id": class_id,
-
-                "class_name": class_name,
-
-                "confidence": round(
-                    score,
-                    4
-                ),
-
-                "bbox": {
-
-                    "x1": round(x1, 2),
-
-                    "y1": round(y1, 2),
-
-                    "x2": round(x2, 2),
-
-                    "y2": round(y2, 2)
-                }
-            })
-
-    return detections, elapsed_time
-
-
-# =========================================================
-# PREDICT API
-# =========================================================
-
-@app.post("/predict")
-async def predict(
-    file: UploadFile = File(...),
-    confidence: float = 0.25
-):
-
-    REQUESTS.labels("/predict").inc()
-
-    # Check file type
-
-    if (
-        not file.content_type
-        or not file.content_type.startswith("image/")
-    ):
-
-        raise HTTPException(
-            status_code=400,
-            detail="Please upload an image file."
+    return (
+        build_prediction_payload(
+            filename=file.filename,
+            image=image,
+            result=result,
         )
-
-    # Read uploaded file
-
-    file_data = await file.read()
-
-    # Convert to OpenCV image
-
-    image = cv2.imdecode(
-        np.frombuffer(
-            file_data,
-            np.uint8
-        ),
-        cv2.IMREAD_COLOR
     )
 
-    if image is None:
-
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid image file."
-        )
-
-    # Run YOLO
-
-    detections, elapsed_time = run_inference(
-        image,
-        confidence
-    )
-
-    # Return JSON
-
-    return {
-
-        "request_id": str(uuid.uuid4()),
-
-        "filename": file.filename,
-
-        "inference_time_ms": round(
-            elapsed_time * 1000,
-            2
-        ),
-
-        "detection_count": len(
-            detections
-        ),
-
-        "detections": detections
-    }
-
 
 # =========================================================
-# PREDICT + ANNOTATED IMAGE
+# PREDICT ANNOTATED IMAGE
 # =========================================================
 
-@app.post("/predict/image")
+@app.post(
+    "/predict/image"
+)
 async def predict_image(
-    file: UploadFile = File(...),
-    confidence: float = 0.25
+    file: UploadFile = File(
+        ...
+    ),
+    confidence: float = 0.25,
 ):
 
     REQUESTS.labels(
         "/predict/image"
     ).inc()
 
-    if (
-        not file.content_type
-        or not file.content_type.startswith("image/")
-    ):
+    confidence = (
+        validate_confidence(
+            confidence
+        )
+    )
 
+    image = (
+        await read_uploaded_image(
+            file
+        )
+    )
+
+    service = (
+        get_detector()
+    )
+
+    try:
+        (
+            annotated_image,
+            result,
+        ) = (
+            service
+            .detect_and_draw(
+                image=image,
+                confidence=confidence,
+            )
+        )
+
+    except RuntimeError as error:
         raise HTTPException(
-            status_code=400,
-            detail="Please upload an image file."
-        )
+            status_code=503,
+            detail=str(
+                error
+            ),
+        ) from error
 
-    file_data = await file.read()
-
-    image = cv2.imdecode(
-        np.frombuffer(
-            file_data,
-            np.uint8
-        ),
-        cv2.IMREAD_COLOR
+    record_inference_metrics(
+        result
     )
 
-    if image is None:
-
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid image file."
+    try:
+        image_bytes = (
+            encode_jpeg(
+                annotated_image
+            )
         )
 
-    detections, _ = run_inference(
-        image,
-        confidence
-    )
-
-    # Draw bounding boxes
-
-    for detection in detections:
-
-        bbox = detection["bbox"]
-
-        x1 = int(bbox["x1"])
-        y1 = int(bbox["y1"])
-        x2 = int(bbox["x2"])
-        y2 = int(bbox["y2"])
-
-        class_name = detection[
-            "class_name"
-        ]
-
-        score = detection[
-            "confidence"
-        ]
-
-        # Bounding box
-
-        cv2.rectangle(
-            image,
-            (x1, y1),
-            (x2, y2),
-            (0, 180, 255),
-            2
-        )
-
-        # Label
-
-        label = (
-            f"{class_name} "
-            f"{score:.2f}"
-        )
-
-        cv2.putText(
-            image,
-            label,
-            (x1, max(20, y1 - 8)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.55,
-            (0, 180, 255),
-            2
-        )
-
-    # Encode image
-
-    success, encoded_image = cv2.imencode(
-        ".jpg",
-        image
-    )
-
-    if not success:
-
+    except ValueError as error:
         raise HTTPException(
             status_code=500,
-            detail="Unable to encode output image."
-        )
+            detail=str(
+                error
+            ),
+        ) from error
 
     return Response(
-        content=encoded_image.tobytes(),
-        media_type="image/jpeg"
+        content=image_bytes,
+        media_type="image/jpeg",
+        headers={
+            "X-Quality-Decision":
+                result[
+                    "quality"
+                ][
+                    "decision"
+                ]
+        },
     )
 
 
 # =========================================================
-# PROMETHEUS METRICS
+# METRICS
 # =========================================================
 
-@app.get("/metrics")
+@app.get(
+    "/metrics"
+)
 def metrics():
 
+    REQUESTS.labels(
+        "/metrics"
+    ).inc()
+
     return Response(
-        generate_latest(),
-        media_type=CONTENT_TYPE_LATEST
+        content=generate_latest(),
+        media_type=(
+            CONTENT_TYPE_LATEST
+        ),
     )

@@ -1,437 +1,639 @@
-import os
+from pathlib import Path
 import time
 
 import cv2
-import numpy as np
 
 from ultralytics import YOLO
 
 from app.config import (
     MODEL_PATH,
+    QUALITY_POLICY_PATH,
     CONFIDENCE_THRESHOLD,
     IOU_THRESHOLD,
-    IMAGE_SIZE
+    IMAGE_SIZE,
+    INFERENCE_DEVICE,
+)
+
+from ml.src.inference.quality_decision import (
+    apply_quality_policy,
+    get_bbox,
+    load_quality_policy,
 )
 
 
 class DefectDetector:
+    """
+    Shared inference service used by the API.
 
-    def __init__(self):
+    Responsibilities:
+    - load the optimized YOLO model
+    - run object detection
+    - convert YOLO output into JSON-safe data
+    - apply the Day 20 quality decision policy
+    - draw annotated predictions
+    """
+
+    def __init__(
+        self,
+        model_path: Path = MODEL_PATH,
+        quality_policy_path: Path = (
+            QUALITY_POLICY_PATH
+        ),
+    ):
+        self.model_path = Path(
+            model_path
+        )
+
+        self.quality_policy_path = Path(
+            quality_policy_path
+        )
 
         self.model = None
 
+        self.quality_policy = (
+            load_quality_policy(
+                self.quality_policy_path
+            )
+        )
+
         self.load_model()
 
+    # =====================================================
+    # MODEL LOADING
+    # =====================================================
 
-    # ==========================================
-    # LOAD YOLO MODEL
-    # ==========================================
+    def load_model(
+        self,
+    ) -> None:
+        """
+        Load YOLO when the model artifact exists.
 
-    def load_model(self):
+        Missing model weights do not crash
+        the entire API. Health endpoints can
+        still report model availability.
+        """
 
-        if not os.path.exists(
-            MODEL_PATH
-        ):
+        if not self.model_path.exists():
 
             print(
-                f"WARNING: YOLO model not found at "
-                f"{MODEL_PATH}"
+                "WARNING: optimized YOLO "
+                "model not found."
             )
 
             print(
-                "Place your trained best.pt file "
-                "inside the models folder."
+                f"Expected model: "
+                f"{self.model_path}"
             )
+
+            self.model = None
 
             return
 
-
         try:
-
             self.model = YOLO(
-                MODEL_PATH
+                str(
+                    self.model_path
+                )
             )
 
             print(
-                f"YOLO model loaded: "
-                f"{MODEL_PATH}"
+                "YOLO model loaded "
+                "successfully."
+            )
+
+            print(
+                f"Model path: "
+                f"{self.model_path}"
             )
 
         except Exception as error:
 
+            self.model = None
+
             print(
-                f"Model loading error: {error}"
+                f"Model loading error: "
+                f"{error}"
             )
 
+    # =====================================================
+    # STATUS
+    # =====================================================
 
-    # ==========================================
-    # MODEL STATUS
-    # ==========================================
+    def is_ready(
+        self,
+    ) -> bool:
+        return (
+            self.model is not None
+        )
 
-    def is_ready(self):
-
-        return self.model is not None
-
-
-    # ==========================================
-    # GET CLASS NAMES
-    # ==========================================
-
-    def get_classes(self):
-
+    def get_classes(
+        self,
+    ):
         if not self.is_ready():
-
             return {}
 
         return self.model.names
 
+    # =====================================================
+    # VALIDATION
+    # =====================================================
 
-    # ==========================================
-    # DETECT DEFECTS
-    # ==========================================
+    @staticmethod
+    def validate_confidence(
+        confidence: float,
+    ) -> float:
+        confidence = float(
+            confidence
+        )
 
-    def detect(
+        if not (
+            0.0
+            <= confidence
+            <= 1.0
+        ):
+            raise ValueError(
+                "Confidence must be "
+                "between 0 and 1."
+            )
+
+        return confidence
+
+    # =====================================================
+    # RESULT EXTRACTION
+    # =====================================================
+
+    def extract_detections(
         self,
-        image,
-        confidence=None
-    ):
+        result,
+    ) -> list[dict]:
+        """
+        Convert an Ultralytics result into
+        simple JSON-compatible detections.
+        """
 
-        if not self.is_ready():
-
-            raise RuntimeError(
-                "YOLO model is not loaded. "
-                "Place models/best.pt in the project."
-            )
-
-
-        if confidence is None:
-
-            confidence = (
-                CONFIDENCE_THRESHOLD
-            )
-
-
-        start_time = time.perf_counter()
-
-
-        # --------------------------------------
-        # YOLO INFERENCE
-        # --------------------------------------
-
-        results = self.model.predict(
-
-            source=image,
-
-            conf=confidence,
-
-            iou=IOU_THRESHOLD,
-
-            imgsz=IMAGE_SIZE,
-
-            verbose=False
-
+        boxes = getattr(
+            result,
+            "boxes",
+            None,
         )
 
+        if boxes is None:
+            return []
 
-        inference_time = (
-            time.perf_counter()
-            - start_time
+        xyxy_tensor = getattr(
+            boxes,
+            "xyxy",
+            None,
         )
 
+        confidence_tensor = getattr(
+            boxes,
+            "conf",
+            None,
+        )
+
+        class_tensor = getattr(
+            boxes,
+            "cls",
+            None,
+        )
+
+        if (
+            xyxy_tensor is None
+            or confidence_tensor is None
+            or class_tensor is None
+        ):
+            return []
+
+        xyxy_values = (
+            xyxy_tensor
+            .detach()
+            .cpu()
+            .numpy()
+        )
+
+        confidence_values = (
+            confidence_tensor
+            .detach()
+            .cpu()
+            .numpy()
+        )
+
+        class_values = (
+            class_tensor
+            .detach()
+            .cpu()
+            .numpy()
+        )
+
+        if not (
+            len(xyxy_values)
+            == len(confidence_values)
+            == len(class_values)
+        ):
+            raise ValueError(
+                "YOLO result tensors "
+                "have inconsistent lengths."
+            )
+
+        names = getattr(
+            result,
+            "names",
+            self.model.names,
+        )
 
         detections = []
 
+        for (
+            box,
+            confidence,
+            class_value,
+        ) in zip(
+            xyxy_values,
+            confidence_values,
+            class_values,
+        ):
 
-        # --------------------------------------
-        # PROCESS RESULTS
-        # --------------------------------------
-
-        for result in results:
-
-            if result.boxes is None:
-
-                continue
-
-
-            boxes = (
-                result.boxes
+            class_id = int(
+                class_value
             )
 
-
-            for i in range(
-                len(boxes)
+            if isinstance(
+                names,
+                dict,
             ):
-
-                box = boxes.xyxy[
-                    i
-                ].cpu().numpy()
-
-
-                confidence_score = float(
-                    boxes.conf[
-                        i
-                    ].cpu().item()
+                class_name = names.get(
+                    class_id,
+                    str(class_id),
                 )
 
+            else:
+                class_name = names[
+                    class_id
+                ]
 
-                class_id = int(
-                    boxes.cls[
-                        i
-                    ].cpu().item()
-                )
+            x1, y1, x2, y2 = [
+                float(value)
+                for value in box
+            ]
 
-
-                class_name = (
-                    self.model.names[
-                        class_id
-                    ]
-                )
-
-
-                x1, y1, x2, y2 = (
-                    map(
-                        int,
-                        box
-                    )
-                )
-
-
-                detections.append({
-
+            detections.append(
+                {
                     "class_id":
                         class_id,
 
                     "class_name":
-                        class_name,
+                        str(
+                            class_name
+                        ),
 
                     "confidence":
                         round(
-                            confidence_score,
-                            4
+                            float(
+                                confidence
+                            ),
+                            4,
                         ),
 
                     "bbox": {
+                        "x1":
+                            round(
+                                x1,
+                                2,
+                            ),
 
-                        "x1": x1,
+                        "y1":
+                            round(
+                                y1,
+                                2,
+                            ),
 
-                        "y1": y1,
+                        "x2":
+                            round(
+                                x2,
+                                2,
+                            ),
 
-                        "x2": x2,
-
-                        "y2": y2
-                    }
-                })
-
-
-        return {
-
-            "detections":
-                detections,
-
-            "detection_count":
-                len(detections),
-
-            "inference_time_ms":
-                round(
-                    inference_time * 1000,
-                    2
-                )
-        }
-
-
-    # ==========================================
-    # ANNOTATED IMAGE
-    # ==========================================
-
-    def detect_and_draw(
-        self,
-        image,
-        confidence=None
-    ):
-
-        if not self.is_ready():
-
-            raise RuntimeError(
-                "YOLO model is not loaded."
+                        "y2":
+                            round(
+                                y2,
+                                2,
+                            ),
+                    },
+                }
             )
 
+        return detections
+
+    # =====================================================
+    # RAW DETECTION
+    # =====================================================
+
+    def detect(
+        self,
+        image,
+        confidence=None,
+    ) -> dict:
+        """
+        Execute optimized YOLO inference.
+        """
+
+        if not self.is_ready():
+            raise RuntimeError(
+                "Optimized YOLO model "
+                "is not loaded."
+            )
 
         if confidence is None:
-
             confidence = (
                 CONFIDENCE_THRESHOLD
             )
 
+        confidence = (
+            self.validate_confidence(
+                confidence
+            )
+        )
 
-        start_time = time.perf_counter()
-
+        start_time = (
+            time.perf_counter()
+        )
 
         results = self.model.predict(
-
             source=image,
-
             conf=confidence,
-
             iou=IOU_THRESHOLD,
-
             imgsz=IMAGE_SIZE,
-
-            verbose=False
-
+            device=INFERENCE_DEVICE,
+            verbose=False,
         )
 
-
-        inference_time = (
-            time.perf_counter()
-            - start_time
+        inference_time_ms = (
+            (
+                time.perf_counter()
+                - start_time
+            )
+            * 1000.0
         )
 
+        if not results:
+            detections = []
+
+        else:
+            detections = (
+                self.extract_detections(
+                    results[0]
+                )
+            )
+
+        return {
+            "detections":
+                detections,
+
+            "detection_count":
+                len(
+                    detections
+                ),
+
+            "inference_time_ms":
+                round(
+                    inference_time_ms,
+                    2,
+                ),
+        }
+
+    # =====================================================
+    # QUALITY POLICY
+    # =====================================================
+
+    def apply_quality(
+        self,
+        image,
+        detections: list[dict],
+    ) -> dict:
+        """
+        Apply Day 20 operational triage
+        to backend-format detections.
+        """
+
+        if image is None:
+            raise ValueError(
+                "Image cannot be None."
+            )
+
+        height, width = (
+            image.shape[:2]
+        )
+
+        return apply_quality_policy(
+            detections=detections,
+            image_width=width,
+            image_height=height,
+            policy=self.quality_policy,
+        )
+
+    def detect_with_quality(
+        self,
+        image,
+        confidence=None,
+    ) -> dict:
+        """
+        Execute detection followed by
+        PASS / REVIEW / REJECT processing.
+        """
+
+        detection_result = (
+            self.detect(
+                image=image,
+                confidence=confidence,
+            )
+        )
+
+        quality_result = (
+            self.apply_quality(
+                image=image,
+                detections=(
+                    detection_result[
+                        "detections"
+                    ]
+                ),
+            )
+        )
+
+        return {
+            **detection_result,
+
+            "quality":
+                quality_result,
+        }
+
+    # =====================================================
+    # ANNOTATED IMAGE
+    # =====================================================
+
+    def detect_and_draw(
+        self,
+        image,
+        confidence=None,
+    ):
+        """
+        Run the complete inference pipeline and
+        draw the final post-processed detections.
+        """
+
+        result = (
+            self.detect_with_quality(
+                image=image,
+                confidence=confidence,
+            )
+        )
 
         annotated_image = (
             image.copy()
         )
 
-        detections = []
+        detections = (
+            result[
+                "quality"
+            ][
+                "detections"
+            ]
+        )
 
+        color_by_level = {
+            "LOW":
+                (
+                    0,
+                    180,
+                    0,
+                ),
 
-        for result in results:
+            "MEDIUM":
+                (
+                    0,
+                    180,
+                    255,
+                ),
 
-            if result.boxes is None:
+            "HIGH":
+                (
+                    0,
+                    0,
+                    255,
+                ),
+        }
 
-                continue
+        for detection in detections:
 
+            bbox = get_bbox(
+                detection
+            )
 
-            boxes = result.boxes
+            x1 = int(
+                bbox["x1"]
+            )
 
+            y1 = int(
+                bbox["y1"]
+            )
 
-            for i in range(
-                len(boxes)
-            ):
+            x2 = int(
+                bbox["x2"]
+            )
 
-                box = boxes.xyxy[
-                    i
-                ].cpu().numpy()
+            y2 = int(
+                bbox["y2"]
+            )
 
+            class_name = (
+                detection[
+                    "class_name"
+                ]
+            )
 
-                score = float(
-                    boxes.conf[
-                        i
-                    ].cpu().item()
-                )
+            confidence_score = (
+                detection[
+                    "confidence"
+                ]
+            )
 
+            triage_level = (
+                detection[
+                    "triage_level"
+                ]
+            )
 
-                class_id = int(
-                    boxes.cls[
-                        i
-                    ].cpu().item()
-                )
+            color = color_by_level.get(
+                triage_level,
+                (
+                    255,
+                    255,
+                    255,
+                ),
+            )
 
+            cv2.rectangle(
+                annotated_image,
+                (
+                    x1,
+                    y1,
+                ),
+                (
+                    x2,
+                    y2,
+                ),
+                color,
+                2,
+            )
 
-                class_name = (
-                    self.model.names[
-                        class_id
-                    ]
-                )
+            label = (
+                f"{class_name} "
+                f"{confidence_score:.2f} "
+                f"[{triage_level}]"
+            )
 
+            cv2.putText(
+                annotated_image,
+                label,
+                (
+                    x1,
+                    max(
+                        20,
+                        y1 - 8,
+                    ),
+                ),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.5,
+                color,
+                2,
+            )
 
-                x1, y1, x2, y2 = map(
-                    int,
-                    box
-                )
+        decision = (
+            result[
+                "quality"
+            ][
+                "decision"
+            ]
+        )
 
-
-                # ----------------------------------
-                # DRAW BOUNDING BOX
-                # ----------------------------------
-
-                cv2.rectangle(
-
-                    annotated_image,
-
-                    (x1, y1),
-
-                    (x2, y2),
-
-                    (0, 255, 0),
-
-                    2
-
-                )
-
-
-                # ----------------------------------
-                # LABEL
-                # ----------------------------------
-
-                label = (
-                    f"{class_name} "
-                    f"{score:.2f}"
-                )
-
-
-                cv2.putText(
-
-                    annotated_image,
-
-                    label,
-
-                    (x1, max(y1 - 10, 20)),
-
-                    cv2.FONT_HERSHEY_SIMPLEX,
-
-                    0.6,
-
-                    (0, 255, 0),
-
-                    2
-
-                )
-
-
-                detections.append({
-
-                    "class_id":
-                        class_id,
-
-                    "class_name":
-                        class_name,
-
-                    "confidence":
-                        round(
-                            score,
-                            4
-                        ),
-
-                    "bbox": {
-
-                        "x1": x1,
-
-                        "y1": y1,
-
-                        "x2": x2,
-
-                        "y2": y2
-                    }
-                })
-
+        cv2.putText(
+            annotated_image,
+            f"Decision: {decision}",
+            (
+                10,
+                25,
+            ),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            (
+                255,
+                255,
+                255,
+            ),
+            2,
+        )
 
         return (
-
             annotated_image,
-
-            {
-
-                "detections":
-                    detections,
-
-                "detection_count":
-                    len(detections),
-
-                "inference_time_ms":
-                    round(
-                        inference_time * 1000,
-                        2
-                    )
-            }
-
+            result,
         )
