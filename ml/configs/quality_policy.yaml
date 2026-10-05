@@ -1,0 +1,17 @@
+postprocessing:
+  minimum_confidence: 0.25
+  duplicate_iou_threshold: 0.80
+
+triage:
+  medium_confidence: 0.50
+  high_confidence: 0.75
+
+  medium_area_ratio: 0.03
+  high_area_ratio: 0.08
+
+  reject_detection_count: 3
+
+decision:
+  pass_label: PASS
+  review_label: REVIEW
+  reject_label: REJECT
