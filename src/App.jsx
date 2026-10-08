@@ -1,31 +1,52 @@
 import {
+  useCallback,
   useEffect,
   useState
 } from "react";
 
-import axios from "axios";
-
 import {
-  Cpu,
   Camera,
+  Cpu,
   ShieldCheck,
   Zap
 } from "lucide-react";
 
-import Navbar from "./components/Navbar";
+import Navbar from
+  "./components/Navbar";
 
-import UploadPanel from "./components/UploadPanel";
+import UploadPanel from
+  "./components/UploadPanel";
 
-import DetectionResult from "./components/DetectionResult";
+import DetectionResult from
+  "./components/DetectionResult";
 
-import Loading from "./components/Loading";
+import Loading from
+  "./components/Loading";
 
-import StatsCard from "./components/StatsCard";
+import StatsCard from
+  "./components/StatsCard";
+
+import {
+  getApiErrorMessage,
+  getHealth,
+  predictAnnotatedImage,
+  predictDefects
+} from "./services/api";
 
 
-const API_URL =
-  import.meta.env.VITE_API_URL ||
-  "http://127.0.0.1:8000";
+const MAX_IMAGE_SIZE_BYTES =
+  10 * 1024 * 1024;
+
+
+const ALLOWED_IMAGE_TYPES =
+  new Set([
+    "image/jpeg",
+    "image/png"
+  ]);
+
+
+const DEFAULT_CONFIDENCE =
+  0.25;
 
 
 function App() {
@@ -34,6 +55,12 @@ function App() {
     backendOnline,
     setBackendOnline
   ] = useState(false);
+
+
+  const [
+    backendInfo,
+    setBackendInfo
+  ] = useState(null);
 
 
   const [
@@ -67,69 +94,199 @@ function App() {
 
 
   // ==========================================
-  // CHECK BACKEND
+  // BACKEND HEALTH
   // ==========================================
-
-  useEffect(() => {
-
-    checkBackend();
-
-  }, []);
-
 
   const checkBackend =
-    async () => {
+    useCallback(
+      async () => {
 
-      try {
+        try {
 
-        await axios.get(
-          `${API_URL}/health`
+          const health =
+            await getHealth();
+
+
+          setBackendInfo(
+            health
+          );
+
+
+          const ready =
+            health.status === "ok"
+            && health.model_loaded === true;
+
+
+          setBackendOnline(
+            ready
+          );
+
+
+          return ready;
+
+        } catch {
+
+          setBackendOnline(
+            false
+          );
+
+          setBackendInfo(
+            null
+          );
+
+
+          return false;
+        }
+
+      },
+      []
+    );
+
+
+  useEffect(
+    () => {
+
+      checkBackend();
+
+
+      const interval =
+        window.setInterval(
+          checkBackend,
+          10000
         );
 
-        setBackendOnline(true);
 
-      } catch {
+      return () => {
 
-        setBackendOnline(false);
+        window.clearInterval(
+          interval
+        );
 
-      }
+      };
 
-    };
+    },
+    [
+      checkBackend
+    ]
+  );
 
 
   // ==========================================
-  // SELECT IMAGE
+  // OBJECT URL CLEANUP
+  // ==========================================
+
+  useEffect(
+    () => {
+
+      return () => {
+
+        if (
+          annotatedImage
+        ) {
+
+          URL.revokeObjectURL(
+            annotatedImage
+          );
+
+        }
+
+      };
+
+    },
+    [
+      annotatedImage
+    ]
+  );
+
+
+  // ==========================================
+  // IMAGE SELECTION
   // ==========================================
 
   const handleImageSelect =
     (file) => {
 
-      setSelectedImage(file);
-
+      setError("");
       setResult(null);
-
       setAnnotatedImage(null);
 
-      setError("");
+
+      if (
+        !ALLOWED_IMAGE_TYPES.has(
+          file.type
+        )
+      ) {
+
+        setSelectedImage(
+          null
+        );
+
+        setError(
+          "Please select a JPG, JPEG or PNG image."
+        );
+
+        return;
+      }
+
+
+      if (
+        file.size >
+        MAX_IMAGE_SIZE_BYTES
+      ) {
+
+        setSelectedImage(
+          null
+        );
+
+        setError(
+          "The selected image exceeds the 10 MB upload limit."
+        );
+
+        return;
+      }
+
+
+      setSelectedImage(
+        file
+      );
 
     };
 
 
   // ==========================================
-  // DETECT DEFECTS
+  // DETECTION
   // ==========================================
 
   const handleDetect =
     async () => {
 
-      if (!selectedImage) {
+      if (
+        !selectedImage
+      ) {
 
         setError(
           "Please select an image first."
         );
 
         return;
+      }
 
+
+      const backendReady =
+        await checkBackend();
+
+
+      if (
+        !backendReady
+      ) {
+
+        setError(
+          "The AI backend is not ready. "
+          + "Start FastAPI and confirm that "
+          + "the optimized model is loaded."
+        );
+
+        return;
       }
 
 
@@ -144,77 +301,28 @@ function App() {
 
       try {
 
-        const formData =
-          new FormData();
-
-
-        formData.append(
-          "file",
-          selectedImage
-        );
-
-
-        // --------------------------------------
-        // JSON Detection
-        // --------------------------------------
-
-        const response =
-          await axios.post(
-
-            `${API_URL}/predict`,
-
-            formData,
-
-            {
-
-              headers: {
-
-                "Content-Type":
-                  "multipart/form-data"
-
-              }
-
-            }
-
+        const prediction =
+          await predictDefects(
+            selectedImage,
+            DEFAULT_CONFIDENCE
           );
 
 
         setResult(
-          response.data
+          prediction
         );
 
 
-        // --------------------------------------
-        // Annotated Image
-        // --------------------------------------
-
-        const imageResponse =
-          await axios.post(
-
-            `${API_URL}/predict/image`,
-
-            formData,
-
-            {
-
-              responseType:
-                "blob",
-
-              headers: {
-
-                "Content-Type":
-                  "multipart/form-data"
-
-              }
-
-            }
-
+        const annotatedBlob =
+          await predictAnnotatedImage(
+            selectedImage,
+            DEFAULT_CONFIDENCE
           );
 
 
         const imageUrl =
           URL.createObjectURL(
-            imageResponse.data
+            annotatedBlob
           );
 
 
@@ -223,33 +331,45 @@ function App() {
         );
 
 
-      } catch (error) {
+        setBackendOnline(
+          true
+        );
+
+      } catch (
+        requestError
+      ) {
 
         console.error(
-          error
+          requestError
+        );
+
+
+        setError(
+          getApiErrorMessage(
+            requestError
+          )
         );
 
 
         if (
-          error.response?.data
-            ?.detail
+          !requestError?.response
+          ||
+          requestError
+            ?.response
+            ?.status === 503
         ) {
 
-          setError(
-            error.response.data.detail
-          );
-
-        } else {
-
-          setError(
-            "Unable to connect to the AI backend. Make sure FastAPI is running."
+          setBackendOnline(
+            false
           );
 
         }
 
       } finally {
 
-        setLoading(false);
+        setLoading(
+          false
+        );
 
       }
 
@@ -258,11 +378,12 @@ function App() {
 
   return (
 
-    <div className="min-h-screen bg-slate-50">
-
-      {/* ======================================
-          NAVBAR
-      ====================================== */}
+    <div
+      className="
+        min-h-screen
+        bg-slate-50
+      "
+    >
 
       <Navbar
         backendOnline={
@@ -271,45 +392,94 @@ function App() {
       />
 
 
-      {/* ======================================
-          HERO
-      ====================================== */}
+      <section
+        className="
+          border-b
+          bg-white
+        "
+      >
 
-      <section className="border-b bg-white">
+        <div
+          className="
+            mx-auto
+            max-w-7xl
+            px-6
+            py-12
+          "
+        >
 
-        <div className="mx-auto max-w-7xl px-6 py-12">
+          <div
+            className="
+              max-w-3xl
+            "
+          >
 
-          <div className="max-w-3xl">
+            <div
+              className="
+                mb-4
+                inline-flex
+                items-center
+                gap-2
+                rounded-full
+                bg-blue-50
+                px-4
+                py-2
+                text-sm
+                font-semibold
+                text-blue-700
+              "
+            >
 
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700">
-
-              <Cpu size={16} />
+              <Cpu
+                size={16}
+              />
 
               AI Computer Vision
 
             </div>
 
 
-            <h2 className="text-4xl font-extrabold tracking-tight text-slate-900 md:text-5xl">
+            <h2
+              className="
+                text-4xl
+                font-extrabold
+                tracking-tight
+                text-slate-900
+                md:text-5xl
+              "
+            >
 
               Real-Time Industrial
 
-              <span className="text-blue-600">
+              <span
+                className="
+                  text-blue-600
+                "
+              >
 
-                {" "}Defect Detection
+                {" "}
+                Defect Detection
 
               </span>
 
             </h2>
 
 
-            <p className="mt-5 max-w-2xl text-lg leading-8 text-slate-600">
+            <p
+              className="
+                mt-5
+                max-w-2xl
+                text-lg
+                leading-8
+                text-slate-600
+              "
+            >
 
               Automatically inspect industrial
               surfaces and identify defects using
               YOLO-based computer vision with
-              confidence scoring and bounding-box
-              localization.
+              confidence scoring, localization,
+              and operational quality triage.
 
             </p>
 
@@ -320,13 +490,22 @@ function App() {
       </section>
 
 
-      {/* ======================================
-          FEATURES
-      ====================================== */}
+      <section
+        className="
+          mx-auto
+          max-w-7xl
+          px-6
+          py-8
+        "
+      >
 
-      <section className="mx-auto max-w-7xl px-6 py-8">
-
-        <div className="grid gap-4 md:grid-cols-3">
+        <div
+          className="
+            grid
+            gap-4
+            md:grid-cols-3
+          "
+        >
 
           <StatsCard
 
@@ -334,29 +513,43 @@ function App() {
 
             value="YOLO"
 
-            description="Deep-learning object detection"
+            description={
+              "Six-class steel surface defect detection"
+            }
 
           />
 
 
           <StatsCard
 
-            title="Processing"
+            title="Inference"
 
-            value="Real-Time"
+            value={
+              backendInfo?.device
+                ?.toUpperCase()
+              || "CPU"
+            }
 
-            description="Fast image inference"
+            description={
+              `Input size ${
+                backendInfo
+                  ?.image_size
+                || 416
+              } px`
+            }
 
           />
 
 
           <StatsCard
 
-            title="Output"
+            title="Quality Output"
 
-            value="BBox + Score"
+            value="PASS / REVIEW / REJECT"
 
-            description="Defect location and confidence"
+            description={
+              "Confidence and area-based operational triage"
+            }
 
           />
 
@@ -365,16 +558,22 @@ function App() {
       </section>
 
 
-      {/* ======================================
-          MAIN DASHBOARD
-      ====================================== */}
+      <main
+        className="
+          mx-auto
+          max-w-7xl
+          px-6
+          pb-12
+        "
+      >
 
-      <main className="mx-auto max-w-7xl px-6 pb-12">
-
-        <div className="grid gap-6 lg:grid-cols-2">
-
-
-          {/* Upload */}
+        <div
+          className="
+            grid
+            gap-6
+            lg:grid-cols-2
+          "
+        >
 
           <UploadPanel
 
@@ -394,170 +593,168 @@ function App() {
               loading
             }
 
+            backendOnline={
+              backendOnline
+            }
+
           />
 
 
-          {/* Results */}
+          {
+            loading
+              ? (
 
-          {loading ? (
+                <div
+                  className="
+                    rounded-2xl
+                    border
+                    bg-white
+                    shadow-sm
+                  "
+                >
 
-            <div className="rounded-2xl border bg-white shadow-sm">
+                  <Loading />
 
-              <Loading />
+                </div>
 
-            </div>
+              )
+              : (
 
-          ) : (
+                <DetectionResult
 
-            <DetectionResult
+                  result={
+                    result
+                  }
 
-              result={
-                result
-              }
+                  annotatedImage={
+                    annotatedImage
+                  }
 
-              annotatedImage={
-                annotatedImage
-              }
+                />
 
-            />
-
-          )}
+              )
+          }
 
         </div>
 
 
-        {/* ======================================
-            ERROR
-        ====================================== */}
+        {
+          error && (
 
-        {error && (
+            <div
+              className="
+                mt-6
+                rounded-xl
+                border
+                border-red-200
+                bg-red-50
+                p-4
+                text-sm
+                font-medium
+                text-red-700
+              "
+            >
 
-          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-4 text-sm font-medium text-red-700">
+              {error}
 
-            {error}
+            </div>
 
-          </div>
+          )
+        }
 
-        )}
 
+        <section
+          className="
+            mt-12
+          "
+        >
 
-        {/* ======================================
-            HOW IT WORKS
-        ====================================== */}
+          <div
+            className="
+              mb-6
+            "
+          >
 
-        <section className="mt-12">
-
-          <div className="mb-6">
-
-            <h2 className="text-2xl font-bold">
-
+            <h2
+              className="
+                text-2xl
+                font-bold
+              "
+            >
               How It Works
-
             </h2>
 
-            <p className="mt-1 text-sm text-slate-500">
-
+            <p
+              className="
+                mt-1
+                text-sm
+                text-slate-500
+              "
+            >
               AI-powered inspection pipeline
-
             </p>
 
           </div>
 
 
-          <div className="grid gap-4 md:grid-cols-4">
+          <div
+            className="
+              grid
+              gap-4
+              md:grid-cols-4
+            "
+          >
+
+            <ProcessCard
+              icon={
+                <Camera
+                  size={28}
+                />
+              }
+              title="01. Capture"
+              description={
+                "Upload an industrial steel surface image."
+              }
+            />
 
 
-            <div className="rounded-2xl border bg-white p-5 shadow-sm">
-
-              <Camera
-                className="text-blue-600"
-                size={28}
-              />
-
-              <h3 className="mt-4 font-bold">
-
-                01. Capture
-
-              </h3>
-
-              <p className="mt-2 text-sm text-slate-500">
-
-                Capture an industrial product
-                or surface image.
-
-              </p>
-
-            </div>
+            <ProcessCard
+              icon={
+                <Cpu
+                  size={28}
+                />
+              }
+              title="02. AI Analysis"
+              description={
+                "YOLO detects and localizes surface defects."
+              }
+            />
 
 
-            <div className="rounded-2xl border bg-white p-5 shadow-sm">
-
-              <Cpu
-                className="text-blue-600"
-                size={28}
-              />
-
-              <h3 className="mt-4 font-bold">
-
-                02. AI Analysis
-
-              </h3>
-
-              <p className="mt-2 text-sm text-slate-500">
-
-                YOLO processes the image and
-                identifies possible defects.
-
-              </p>
-
-            </div>
+            <ProcessCard
+              icon={
+                <ShieldCheck
+                  size={28}
+                />
+              }
+              title="03. Triage"
+              description={
+                "Detections are evaluated using the quality policy."
+              }
+            />
 
 
-            <div className="rounded-2xl border bg-white p-5 shadow-sm">
-
-              <ShieldCheck
-                className="text-blue-600"
-                size={28}
-              />
-
-              <h3 className="mt-4 font-bold">
-
-                03. Inspection
-
-              </h3>
-
-              <p className="mt-2 text-sm text-slate-500">
-
-                Defects are localized with
-                bounding boxes and confidence.
-
-              </p>
-
-            </div>
-
-
-            <div className="rounded-2xl border bg-white p-5 shadow-sm">
-
-              <Zap
-                className="text-blue-600"
-                size={28}
-              />
-
-              <h3 className="mt-4 font-bold">
-
-                04. Decision
-
-              </h3>
-
-              <p className="mt-2 text-sm text-slate-500">
-
-                Results can be used for
-                quality-control decisions.
-
-              </p>
-
-            </div>
-
+            <ProcessCard
+              icon={
+                <Zap
+                  size={28}
+                />
+              }
+              title="04. Decision"
+              description={
+                "The inspection produces PASS, REVIEW or REJECT."
+              }
+            />
 
           </div>
 
@@ -566,15 +763,29 @@ function App() {
       </main>
 
 
-      {/* ======================================
-          FOOTER
-      ====================================== */}
+      <footer
+        className="
+          border-t
+          bg-white
+        "
+      >
 
-      <footer className="border-t bg-white">
+        <div
+          className="
+            mx-auto
+            max-w-7xl
+            px-6
+            py-6
+          "
+        >
 
-        <div className="mx-auto max-w-7xl px-6 py-6">
-
-          <p className="text-center text-sm text-slate-500">
+          <p
+            className="
+              text-center
+              text-sm
+              text-slate-500
+            "
+          >
 
             AI-Based Real-Time Industrial
             Defect Detection
@@ -584,6 +795,57 @@ function App() {
         </div>
 
       </footer>
+
+    </div>
+
+  );
+}
+
+
+function ProcessCard({
+  icon,
+  title,
+  description
+}) {
+
+  return (
+
+    <div
+      className="
+        rounded-2xl
+        border
+        bg-white
+        p-5
+        shadow-sm
+      "
+    >
+
+      <div
+        className="
+          text-blue-600
+        "
+      >
+        {icon}
+      </div>
+
+      <h3
+        className="
+          mt-4
+          font-bold
+        "
+      >
+        {title}
+      </h3>
+
+      <p
+        className="
+          mt-2
+          text-sm
+          text-slate-500
+        "
+      >
+        {description}
+      </p>
 
     </div>
 

@@ -9,21 +9,34 @@ function UploadPanel({
   selectedImage,
   onImageSelect,
   onDetect,
-  loading
+  loading,
+  backendOnline
 }) {
 
-  const handleChange = (
-    event
-  ) => {
+  const handleChange =
+    (event) => {
 
-    const file =
-      event.target.files?.[0];
+      const file =
+        event.target.files?.[0];
 
-    if (file) {
-      onImageSelect(file);
-    }
 
-  };
+      if (
+        file
+      ) {
+
+        onImageSelect(
+          file
+        );
+
+      }
+
+    };
+
+
+  const detectionDisabled =
+    !selectedImage
+    || loading
+    || !backendOnline;
 
 
   return (
@@ -59,8 +72,13 @@ function UploadPanel({
             text-blue-600
           "
         >
-          <ImagePlus size={22} />
+
+          <ImagePlus
+            size={22}
+          />
+
         </div>
+
 
         <div>
 
@@ -112,9 +130,12 @@ function UploadPanel({
       >
 
         <Upload
-          className="text-slate-400"
+          className="
+            text-slate-400
+          "
           size={40}
         />
+
 
         <p
           className="
@@ -126,6 +147,7 @@ function UploadPanel({
           Click to select an image
         </p>
 
+
         <p
           className="
             mt-1
@@ -133,14 +155,17 @@ function UploadPanel({
             text-slate-500
           "
         >
-          JPG, JPEG or PNG
+          JPG, JPEG or PNG — maximum 10 MB
         </p>
+
 
         <input
           type="file"
           accept="image/png,image/jpeg"
           className="hidden"
-          onChange={handleChange}
+          onChange={
+            handleChange
+          }
         />
 
       </label>
@@ -170,6 +195,7 @@ function UploadPanel({
               Selected file
             </p>
 
+
             <p
               className="
                 mt-1
@@ -178,8 +204,11 @@ function UploadPanel({
                 text-blue-700
               "
             >
-              {selectedImage.name}
+              {
+                selectedImage.name
+              }
             </p>
+
 
             <p
               className="
@@ -188,14 +217,43 @@ function UploadPanel({
                 text-blue-600
               "
             >
+
               {
                 (
                   selectedImage.size
                   / 1024
                   / 1024
                 ).toFixed(2)
-              } MB
+              }
+
+              {" MB"}
+
             </p>
+
+          </div>
+
+        )
+      }
+
+
+      {
+        !backendOnline && (
+
+          <div
+            className="
+              mt-4
+              rounded-xl
+              border
+              border-amber-200
+              bg-amber-50
+              p-3
+              text-sm
+              text-amber-700
+            "
+          >
+
+            Detection is disabled until
+            the AI backend and model are ready.
 
           </div>
 
@@ -205,10 +263,11 @@ function UploadPanel({
 
       <button
         type="button"
-        onClick={onDetect}
+        onClick={
+          onDetect
+        }
         disabled={
-          !selectedImage
-          || loading
+          detectionDisabled
         }
         className="
           mt-5
@@ -230,12 +289,17 @@ function UploadPanel({
         "
       >
 
-        <ScanSearch size={20} />
+        <ScanSearch
+          size={20}
+        />
+
 
         {
           loading
             ? "Inspecting..."
-            : "Detect Defects"
+            : !backendOnline
+              ? "Backend Unavailable"
+              : "Detect Defects"
         }
 
       </button>
