@@ -1,18 +1,59 @@
-export default function Loading() {
+function Loading() {
 
   return (
 
-    <div className="flex items-center justify-center gap-3 py-10">
+    <div
+      className="
+        flex
+        min-h-[420px]
+        flex-col
+        items-center
+        justify-center
+        p-8
+        text-center
+      "
+    >
 
-      <div className="h-6 w-6 animate-spin rounded-full border-4 border-slate-200 border-t-blue-600" />
+      <div
+        className="
+          h-12
+          w-12
+          animate-spin
+          rounded-full
+          border-4
+          border-slate-200
+          border-t-blue-600
+        "
+      />
 
-      <span className="text-sm text-slate-600">
+      <h3
+        className="
+          mt-5
+          text-lg
+          font-semibold
+          text-slate-900
+        "
+      >
+        Inspecting Surface
+      </h3>
 
-        AI model is analyzing the image...
-
-      </span>
+      <p
+        className="
+          mt-2
+          max-w-sm
+          text-sm
+          text-slate-500
+        "
+      >
+        The YOLO model is analysing the
+        image and applying the quality
+        decision policy.
+      </p>
 
     </div>
 
   );
 }
+
+
+export default Loading;

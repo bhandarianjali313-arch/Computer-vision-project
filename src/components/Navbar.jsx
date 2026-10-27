@@ -1,44 +1,73 @@
 import {
-  ShieldCheck,
-  Activity
+  Activity,
+  Factory
 } from "lucide-react";
 
 
-export default function Navbar({
+function Navbar({
   backendOnline
 }) {
 
   return (
 
-    <nav className="border-b bg-white">
+    <header className="border-b bg-white">
 
-      <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-4">
+      <div
+        className="
+          mx-auto
+          flex
+          max-w-7xl
+          items-center
+          justify-between
+          px-6
+          py-4
+        "
+      >
 
-        {/* Logo */}
+        <div
+          className="
+            flex
+            items-center
+            gap-3
+          "
+        >
 
-        <div className="flex items-center gap-3">
+          <div
+            className="
+              flex
+              h-10
+              w-10
+              items-center
+              justify-center
+              rounded-xl
+              bg-blue-600
+              text-white
+            "
+          >
 
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-600 text-white">
-
-            <ShieldCheck
-              size={23}
-            />
+            <Factory size={22} />
 
           </div>
 
-
           <div>
 
-            <h1 className="text-lg font-bold text-slate-900">
-
-              Industrial Defect Detection
-
+            <h1
+              className="
+                text-lg
+                font-bold
+                text-slate-900
+              "
+            >
+              DefectVision AI
             </h1>
 
-            <p className="text-xs text-slate-500">
-
-              AI-Powered Computer Vision
-
+            <p
+              className="
+                text-xs
+                text-slate-500
+              "
+            >
+              Industrial Quality Inspection
             </p>
 
           </div>
@@ -46,32 +75,41 @@ export default function Navbar({
         </div>
 
 
-        {/* Backend status */}
+        <div
+          className={`
+            flex
+            items-center
+            gap-2
+            rounded-full
+            px-4
+            py-2
+            text-sm
+            font-semibold
 
-        <div className="flex items-center gap-2 rounded-full border px-3 py-2">
-
-          <Activity
-            size={15}
-            className={
+            ${
               backendOnline
-                ? "text-green-500"
-                : "text-red-500"
+                ? "bg-green-50 text-green-700"
+                : "bg-red-50 text-red-700"
             }
-          />
+          `}
+        >
 
-          <span className="text-sm font-medium">
+          <Activity size={16} />
 
-            {backendOnline
+          {
+            backendOnline
               ? "Backend Online"
-              : "Backend Offline"}
-
-          </span>
+              : "Backend Offline"
+          }
 
         </div>
 
       </div>
 
-    </nav>
+    </header>
 
   );
 }
+
+
+export default Navbar;

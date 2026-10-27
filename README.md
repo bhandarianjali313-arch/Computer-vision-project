@@ -1,328 +1,221 @@
 # AI-Based Real-Time Industrial Defect Detection
 
-An AI-powered Computer Vision system designed to detect and localize defects on industrial surfaces using Deep Learning and YOLO. The system provides an interactive web dashboard where users can upload inspection images, detect potential defects, view confidence scores, and visualize detected regions using bounding boxes.
+A computer-vision system for detecting and classifying metal surface defects using YOLO, a FastAPI backend, and a React frontend.
 
-## 🚀 Project Overview
+## Features
 
-Traditional industrial quality inspection often requires manual examination, which can be time-consuming and prone to human error. This project aims to automate surface-defect inspection using computer vision and deep learning.
+- Detects and classifies six categories of metal surface defects.
+- Provides prediction APIs through FastAPI.
+- Supports image predictions with annotated output.
+- Provides health-check and defect-class information endpoints.
+- Includes an ML pipeline, configuration files, and automated tests.
+- Includes a React/Vite frontend for interacting with the system.
+- Provides application metrics through Prometheus-compatible instrumentation.
 
-The system processes industrial images through a trained YOLO model and returns the detected defect classes, confidence scores, bounding-box coordinates, and annotated inspection images.
+## Defect Classes
 
-## 🎯 Objectives
+| Class ID | Defect Name |
+|---:|---|
+| 0 | Crazing |
+| 1 | Inclusion |
+| 2 | Patches |
+| 3 | Pitted Surface |
+| 4 | Rolled-in Scale |
+| 5 | Scratches |
 
-- Automate industrial surface-defect detection.
-- Reduce dependence on manual visual inspection.
-- Identify and localize potential defects in images.
-- Display defect categories and confidence scores.
-- Provide an interactive dashboard for inspection results.
-- Support faster and more consistent quality-control workflows.
-
-## ✨ Key Features
-
-- **AI-Based Defect Detection:** Uses a YOLO object-detection model to identify defects.
-- **Image Upload:** Supports JPG, JPEG, PNG, and WEBP images.
-- **Defect Classification:** Displays the predicted defect class.
-- **Confidence Score:** Shows the model's confidence for each detection.
-- **Bounding-Box Localization:** Highlights detected regions in the image.
-- **Annotated Images:** Displays the processed image with detection boxes.
-- **Inference-Time Measurement:** Reports the time taken for model inference.
-- **REST API:** Connects the frontend to the computer-vision backend.
-- **Interactive Dashboard:** Provides a simple interface for uploading images and reviewing results.
-- **API Documentation:** Supports interactive testing through FastAPI Swagger UI.
-
-## 🛠️ Technology Stack
+## Technology Stack
 
 | Component | Technologies |
 |---|---|
-| Frontend | React, Vite, Tailwind CSS |
-| Backend | Python, FastAPI |
+| Machine Learning | Python, PyTorch, Ultralytics YOLO |
 | Computer Vision | OpenCV, NumPy |
-| Deep Learning | YOLO, Ultralytics |
-| API Communication | REST API, Axios |
-| Model Format | PyTorch `.pt` |
-| Development Tools | VS Code, Git, GitHub |
+| Backend API | FastAPI, Uvicorn |
+| Frontend | React, Vite |
+| Styling | Tailwind CSS |
+| Monitoring | Prometheus client |
+| Testing | Pytest |
+| Deployment Configuration | Docker, Docker Compose |
 
-## 🏗️ System Architecture
-
-```text
-Industrial Surface Image
-          |
-          v
-    React Dashboard
-          |
-          v
-     FastAPI Backend
-          |
-          v
-    Image Preprocessing
-          |
-          v
-      YOLO Model
-          |
-          v
-    Defect Detection
-          |
-     +----+----+
-     |         |
-     v         v
- Defect Class  Confidence Score
-     |         |
-     +----+----+
-          |
-          v
-   Bounding-Box Drawing
-          |
-          v
- Annotated Image + JSON Results
-          |
-          v
-     React Dashboard
-```
-
-## 📁 Project Structure
+## Repository Structure
 
 ```text
-AI-Industrial-Defect-Detection/
-│
-├── backend/
-│   ├── app/
-│   │   ├── __init__.py
-│   │   ├── main.py
-│   │   ├── detector.py
-│   │   ├── config.py
-│   │   └── utils.py
-│   │
-│   ├── models/
-│   │   └── best.pt
-│   │
-│   ├── requirements.txt
-│   ├── Dockerfile
-│   └── docker-compose.yml
-│
-└── frontend/
-    ├── src/
-    │   ├── components/
-    │   │   ├── Navbar.jsx
-    │   │   ├── UploadPanel.jsx
-    │   │   ├── DetectionResult.jsx
-    │   │   ├── StatsCard.jsx
-    │   │   └── Loading.jsx
-    │   │
-    │   ├── App.jsx
-    │   ├── main.jsx
-    │   └── index.css
-    │
-    ├── public/
-    ├── index.html
-    ├── package.json
-    ├── vite.config.js
-    ├── tailwind.config.js
-    └── postcss.config.js
+Computer-vision-project/
+├── app/
+│   ├── main.py
+│   ├── config.py
+│   ├── detector.py
+│   ├── utils.py
+│   └── services/
+├── ml/
+│   ├── configs/
+│   ├── scripts/
+│   ├── src/
+│   └── tests/
+├── src/                   # React frontend
+├── models/                # Local model weights; excluded from Git
+├── data/                  # Local datasets; excluded from Git
+├── requirements.txt
+├── requirements-ml.txt
+├── package.json
+├── package-lock.json
+├── Dockerfile
+├── docker-compose.yml
+├── vite.config.js
+├── .env.example
+└── README.md
 ```
 
-*Note: Adjust the folder structure above to match your actual GitHub repository. The `best.pt` file must be supplied by training or otherwise obtaining a compatible trained YOLO model.*
+## Prerequisites
 
-## ⚙️ Installation and Setup
+Install the following software before running the project:
 
-### 1. Clone the Repository
+- Python
+- Node.js and npm
+- Git
+- Trained model weights required for inference
 
-```bash
-git clone YOUR_GITHUB_REPOSITORY_URL
-cd AI-Industrial-Defect-Detection
+## Backend Setup
+
+Run the following commands from the repository root in PowerShell.
+
+### 1. Create and activate a virtual environment
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 ```
 
-Replace `YOUR_GITHUB_REPOSITORY_URL` with your repository's actual URL.
+If the virtual environment already exists, activate it rather than creating it again.
 
-### 2. Set Up the Backend
+### 2. Install dependencies
 
-Navigate to the backend folder:
-
-```bash
-cd backend
+```powershell
+python -m pip install -r requirements.txt
 ```
 
-Create a Python virtual environment:
+### 3. Verify model availability
 
-```bash
-python -m venv venv
-```
-
-Activate it on Windows:
-
-```bash
-venv\Scripts\activate
-```
-
-Install the required packages:
-
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Add the YOLO Model
-
-Place your compatible trained YOLO model here:
+The application is configured to use the following model path by default:
 
 ```text
-backend/models/best.pt
+models/optimized/yolo_neu_optimized_best.pt
 ```
 
-The model's class names and detection format must match the backend's expectations.
+Ensure that the required trained model file exists at the configured path before running predictions.
 
-### 4. Start the Backend
+Model weights and datasets are excluded from Git and must be obtained separately.
 
-Run the following command from the backend directory:
+### 4. Start the backend
 
-```bash
+```powershell
 uvicorn app.main:app --reload
 ```
 
-The API will be available at:
+The API should be available at:
 
 ```text
 http://127.0.0.1:8000
 ```
 
-Open the interactive API documentation:
+Interactive API documentation:
 
 ```text
 http://127.0.0.1:8000/docs
 ```
 
-### 5. Set Up the Frontend
+## Frontend Setup
 
-Open a second terminal and navigate to the frontend folder:
+Open a second PowerShell terminal in the repository root.
 
-```bash
-cd frontend
+### 1. Install frontend dependencies
+
+```powershell
+npm ci
 ```
 
-Install the dependencies:
+### 2. Configure the API URL
 
-```bash
-npm install
-```
+The example environment configuration contains:
 
-Create a `.env` file in the frontend root:
-
-```env
+```text
 VITE_API_URL=http://127.0.0.1:8000
 ```
 
-Start the development server:
+Create a local `.env` file from `.env.example` if one does not already exist:
 
-```bash
+```powershell
+Copy-Item .env.example .env
+```
+
+If `.env` already exists, keep it and verify that its API URL is correct.
+
+### 3. Start the frontend
+
+```powershell
 npm run dev
 ```
 
-Open the local frontend URL displayed in the terminal, usually:
+Open the local URL printed by Vite in your terminal.
 
-```text
-http://localhost:5173
-```
-
-Keep both the frontend and backend running during local testing.
-
-## 🔌 API Endpoints
+## API Endpoints
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/` | Returns project and service information |
-| GET | `/health` | Checks backend and model status |
-| GET | `/classes` | Returns the loaded model's class names |
-| POST | `/predict` | Detects defects and returns JSON results |
-| POST | `/predict/image` | Returns an annotated JPEG image |
-| GET | `/metrics` | Returns basic service status information |
+| GET | `/` | Returns service information |
+| GET | `/health` | Checks application health |
+| GET | `/classes` | Returns the available defect classes |
+| POST | `/predict` | Returns prediction results |
+| POST | `/predict/image` | Returns an annotated prediction image |
+| GET | `/metrics` | Exposes application metrics |
 
-### Example Prediction Response
+For request parameters, payload formats, and response schemas, refer to the interactive API documentation at `/docs`.
 
-```json
-{
-  "request_id": "example-request-id",
-  "filename": "industrial_surface.jpg",
-  "image": {
-    "width": 640,
-    "height": 480,
-    "channels": 3
-  },
-  "detection_count": 1,
-  "inference_time_ms": 20.5,
-  "detections": [
-    {
-      "class_id": 0,
-      "class_name": "example_defect",
-      "confidence": 0.94,
-      "bbox": {
-        "x1": 120,
-        "y1": 80,
-        "x2": 260,
-        "y2": 210
-      }
-    }
-  ]
-}
+## Running Tests
+
+Activate the project's Python virtual environment and run:
+
+```powershell
+python -m pytest ml/tests -q
 ```
 
-*The response above is illustrative, not a measured result. Actual classes, confidence scores, coordinates, and inference times depend on your trained model and hardware.*
+The current test run completed with **110 passed tests**. Two FastAPI deprecation warnings were reported for the older `on_event` lifecycle API.
 
-## 🔄 Working Process
+## Building the Frontend
 
-1. The user opens the web dashboard.
-2. The user uploads an industrial surface image.
-3. The frontend sends the image to the FastAPI backend.
-4. OpenCV decodes the image for processing.
-5. The YOLO model performs inference.
-6. The backend extracts defect classes, confidence scores, and bounding boxes.
-7. The system generates an annotated image.
-8. The frontend displays the inspection results.
+To create a production frontend build, run:
 
-## 🧪 Testing
+```powershell
+npm run build
+```
 
-1. Start the backend and frontend.
-2. Open the dashboard in your browser.
-3. Upload a supported industrial image.
-4. Click **Detect Defects**.
-5. Review the detection count, defect classes, confidence scores, bounding boxes, and annotated image.
+The generated production assets are written to the `dist/` directory.
 
-For direct API testing, use the Swagger documentation at `http://127.0.0.1:8000/docs`.
+The current frontend build completed successfully.
 
-## 📌 Applications
+## Model Evaluation and Performance
 
-- Steel and metal surface inspection
-- Manufacturing quality control
-- Automated production-line inspection
-- Industrial material defect identification
-- Surface-quality monitoring
-- Computer-vision research and education
+Model performance depends on the trained weights, evaluation dataset, hardware, and inference configuration.
 
-## 🔮 Future Enhancements
+Record and report evaluation metrics using the actual results produced by the project's evaluation pipeline. Do not interpret benchmark values as guaranteed production performance.
 
-- Real-time camera and video-stream inspection
-- Integration with industrial cameras
-- Defect severity classification
-- Inspection history and database storage
-- Automated quality-control reports
-- Real-time alerts for detected defects
-- Production-line and PLC integration
-- Model optimization for edge devices
+## Deployment Notes
 
-## ⚠️ Limitations
+- Keep trained model weights and datasets out of Git when they are excluded by `.gitignore`.
+- Provide the required model weights to the deployment environment.
+- Configure the frontend API URL for the target backend environment.
+- Do not commit secrets, credentials, or private environment configuration.
+- Validate Docker builds in an environment where Docker is installed.
+- Confirm that the model path mounted into a container matches the path expected by the application.
 
-- Detection performance depends on the quality and coverage of the training dataset.
-- A compatible trained YOLO model is required for actual inference.
-- Incorrect lighting, image blur, and unfamiliar defect types can affect predictions.
-- Confidence scores are model estimates, not guarantees of correctness.
-- Real-time production performance depends on the hardware and deployment environment.
+## Current Verification
 
-## 👥 Contributors
+The following checks have completed successfully:
 
-Add the names of your project team members here.
+- **ML tests:** 110 passed.
+- **Frontend production build:** successful.
 
-## 📄 License
+Docker image building has not been verified in the current environment.
 
-This project is intended for educational and research purposes. Add an appropriate open-source license before distributing the repository.
+## License
 
----
-
-**AI-Based Real-Time Industrial Defect Detection**  
-*Automating quality inspection through Computer Vision and Deep Learning.*
+Add the applicable project license before distributing or publishing the repository.

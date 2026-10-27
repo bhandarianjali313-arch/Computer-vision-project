@@ -1,4 +1,4 @@
-export default function StatsCard({
+function StatsCard({
   title,
   value,
   description
@@ -6,33 +6,52 @@ export default function StatsCard({
 
   return (
 
-    <div className="rounded-2xl border bg-white p-5 shadow-sm">
+    <div
+      className="
+        rounded-2xl
+        border
+        border-slate-200
+        bg-white
+        p-5
+        shadow-sm
+      "
+    >
 
-      <p className="text-sm font-medium text-slate-500">
-
+      <p
+        className="
+          text-sm
+          font-medium
+          text-slate-500
+        "
+      >
         {title}
-
       </p>
 
-
-      <h3 className="mt-2 text-2xl font-bold text-slate-900">
-
+      <p
+        className="
+          mt-2
+          text-2xl
+          font-bold
+          text-slate-900
+        "
+      >
         {value}
+      </p>
 
-      </h3>
-
-
-      {description && (
-
-        <p className="mt-1 text-xs text-slate-500">
-
-          {description}
-
-        </p>
-
-      )}
+      <p
+        className="
+          mt-1
+          text-sm
+          text-slate-500
+        "
+      >
+        {description}
+      </p>
 
     </div>
 
   );
 }
+
+
+export default StatsCard;

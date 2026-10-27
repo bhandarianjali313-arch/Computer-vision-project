@@ -1,159 +1,313 @@
 import {
-  Upload,
-  Image as ImageIcon
+  ImagePlus,
+  ScanSearch,
+  Upload
 } from "lucide-react";
 
 
-export default function UploadPanel({
-
+function UploadPanel({
   selectedImage,
-
   onImageSelect,
-
   onDetect,
-
-  loading
-
+  loading,
+  backendOnline
 }) {
 
-  const handleFileChange = (
-    event
-  ) => {
+  const handleChange =
+    (event) => {
 
-    const file =
-      event.target.files?.[0];
+      const file =
+        event.target.files?.[0];
 
-    if (!file) return;
 
-    onImageSelect(file);
-  };
+      if (
+        file
+      ) {
+
+        onImageSelect(
+          file
+        );
+
+      }
+
+    };
+
+
+  const detectionDisabled =
+    !selectedImage
+    || loading
+    || !backendOnline;
 
 
   return (
 
-    <div className="rounded-2xl border bg-white p-6 shadow-sm">
+    <section
+      className="
+        rounded-2xl
+        border
+        border-slate-200
+        bg-white
+        p-6
+        shadow-sm
+      "
+    >
 
-      <div className="mb-5">
+      <div
+        className="
+          flex
+          items-center
+          gap-3
+        "
+      >
 
-        <h2 className="text-lg font-bold">
+        <div
+          className="
+            flex
+            h-11
+            w-11
+            items-center
+            justify-center
+            rounded-xl
+            bg-blue-50
+            text-blue-600
+          "
+        >
 
-          Upload Inspection Image
+          <ImagePlus
+            size={22}
+          />
 
-        </h2>
+        </div>
 
-        <p className="mt-1 text-sm text-slate-500">
 
-          Upload a product or surface image
-          for AI defect detection.
+        <div>
 
-        </p>
+          <h2
+            className="
+              text-lg
+              font-bold
+              text-slate-900
+            "
+          >
+            Upload Inspection Image
+          </h2>
+
+          <p
+            className="
+              text-sm
+              text-slate-500
+            "
+          >
+            Select an industrial steel
+            surface image.
+          </p>
+
+        </div>
 
       </div>
 
 
-      {/* Upload area */}
-
-      <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-300 bg-slate-50 px-6 py-10 transition hover:border-blue-500 hover:bg-blue-50">
+      <label
+        className="
+          mt-6
+          flex
+          min-h-[260px]
+          cursor-pointer
+          flex-col
+          items-center
+          justify-center
+          rounded-2xl
+          border-2
+          border-dashed
+          border-slate-300
+          bg-slate-50
+          p-8
+          text-center
+          transition
+          hover:border-blue-400
+          hover:bg-blue-50
+        "
+      >
 
         <Upload
-          size={35}
-          className="text-blue-600"
+          className="
+            text-slate-400
+          "
+          size={40}
         />
 
 
-        <p className="mt-3 font-semibold">
-
-          Choose inspection image
-
+        <p
+          className="
+            mt-4
+            font-semibold
+            text-slate-700
+          "
+        >
+          Click to select an image
         </p>
 
 
-        <p className="mt-1 text-xs text-slate-500">
-
-          PNG, JPG or WEBP
-
+        <p
+          className="
+            mt-1
+            text-sm
+            text-slate-500
+          "
+        >
+          JPG, JPEG or PNG — maximum 10 MB
         </p>
 
 
         <input
-
           type="file"
-
-          accept="image/png,image/jpeg,image/webp"
-
-          onChange={
-            handleFileChange
-          }
-
+          accept="image/png,image/jpeg"
           className="hidden"
-
+          onChange={
+            handleChange
+          }
         />
 
       </label>
 
 
-      {/* Selected image */}
+      {
+        selectedImage && (
 
-      {selectedImage && (
+          <div
+            className="
+              mt-4
+              rounded-xl
+              border
+              border-blue-100
+              bg-blue-50
+              p-4
+            "
+          >
 
-        <div className="mt-5">
+            <p
+              className="
+                text-sm
+                font-semibold
+                text-blue-800
+              "
+            >
+              Selected file
+            </p>
 
-          <p className="mb-2 text-sm font-medium">
 
-            Selected Image
+            <p
+              className="
+                mt-1
+                break-all
+                text-sm
+                text-blue-700
+              "
+            >
+              {
+                selectedImage.name
+              }
+            </p>
 
-          </p>
 
+            <p
+              className="
+                mt-1
+                text-xs
+                text-blue-600
+              "
+            >
 
-          <div className="overflow-hidden rounded-xl border">
-
-            <img
-
-              src={
-                URL.createObjectURL(
-                  selectedImage
-                )
+              {
+                (
+                  selectedImage.size
+                  / 1024
+                  / 1024
+                ).toFixed(2)
               }
 
-              alt="Selected inspection"
+              {" MB"}
 
-              className="max-h-80 w-full object-contain bg-slate-100"
-
-            />
+            </p>
 
           </div>
 
-
-          <p className="mt-2 flex items-center gap-2 text-xs text-slate-500">
-
-            <ImageIcon size={14} />
-
-            {selectedImage.name}
-
-          </p>
+        )
+      }
 
 
-          <button
+      {
+        !backendOnline && (
 
-            onClick={onDetect}
-
-            disabled={loading}
-
-            className="mt-5 w-full rounded-xl bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-
+          <div
+            className="
+              mt-4
+              rounded-xl
+              border
+              border-amber-200
+              bg-amber-50
+              p-3
+              text-sm
+              text-amber-700
+            "
           >
 
-            {loading
-              ? "Analyzing..."
-              : "Detect Defects"}
+            Detection is disabled until
+            the AI backend and model are ready.
 
-          </button>
+          </div>
 
-        </div>
+        )
+      }
 
-      )}
 
-    </div>
+      <button
+        type="button"
+        onClick={
+          onDetect
+        }
+        disabled={
+          detectionDisabled
+        }
+        className="
+          mt-5
+          flex
+          w-full
+          items-center
+          justify-center
+          gap-2
+          rounded-xl
+          bg-blue-600
+          px-5
+          py-3
+          font-semibold
+          text-white
+          transition
+          hover:bg-blue-700
+          disabled:cursor-not-allowed
+          disabled:bg-slate-300
+        "
+      >
+
+        <ScanSearch
+          size={20}
+        />
+
+
+        {
+          loading
+            ? "Inspecting..."
+            : !backendOnline
+              ? "Backend Unavailable"
+              : "Detect Defects"
+        }
+
+      </button>
+
+    </section>
 
   );
 }
+
+
+export default UploadPanel;
