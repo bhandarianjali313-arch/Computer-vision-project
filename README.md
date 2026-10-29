@@ -120,150 +120,10 @@ AI-Industrial-Defect-Detection/
     └── postcss.config.js
 ```
 
-*Note: Adjust the folder structure above to match your actual GitHub repository. The `best.pt` file must be supplied by training or otherwise obtaining a compatible trained YOLO model.*
 
-## ⚙️ Installation and Setup
 
-### 1. Clone the Repository
 
-```bash
-git clone YOUR_GITHUB_REPOSITORY_URL
-cd AI-Industrial-Defect-Detection
-```
 
-Replace `YOUR_GITHUB_REPOSITORY_URL` with your repository's actual URL.
-
-### 2. Set Up the Backend
-
-Navigate to the backend folder:
-
-```bash
-cd backend
-```
-
-Create a Python virtual environment:
-
-```bash
-python -m venv venv
-```
-
-Activate it on Windows:
-
-```bash
-venv\Scripts\activate
-```
-
-Install the required packages:
-
-```bash
-pip install -r requirements.txt
-```
-
-### 3. Add the YOLO Model
-
-Place your compatible trained YOLO model here:
-
-```text
-backend/models/best.pt
-```
-
-The model's class names and detection format must match the backend's expectations.
-
-### 4. Start the Backend
-
-Run the following command from the backend directory:
-
-```bash
-uvicorn app.main:app --reload
-```
-
-The API will be available at:
-
-```text
-http://127.0.0.1:8000
-```
-
-Open the interactive API documentation:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-### 5. Set Up the Frontend
-
-Open a second terminal and navigate to the frontend folder:
-
-```bash
-cd frontend
-```
-
-Install the dependencies:
-
-```bash
-npm install
-```
-
-Create a `.env` file in the frontend root:
-
-```env
-VITE_API_URL=http://127.0.0.1:8000
-```
-
-Start the development server:
-
-```bash
-npm run dev
-```
-
-Open the local frontend URL displayed in the terminal, usually:
-
-```text
-http://localhost:5173
-```
-
-Keep both the frontend and backend running during local testing.
-
-## 🔌 API Endpoints
-
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/` | Returns project and service information |
-| GET | `/health` | Checks backend and model status |
-| GET | `/classes` | Returns the loaded model's class names |
-| POST | `/predict` | Detects defects and returns JSON results |
-| POST | `/predict/image` | Returns an annotated JPEG image |
-| GET | `/metrics` | Returns basic service status information |
-
-### Example Prediction Response
-
-```json
-{
-  "request_id": "example-request-id",
-  "filename": "industrial_surface.jpg",
-  "image": {
-    "width": 640,
-    "height": 480,
-    "channels": 3
-  },
-  "detection_count": 1,
-  "inference_time_ms": 20.5,
-  "detections": [
-    {
-      "class_id": 0,
-      "class_name": "example_defect",
-      "confidence": 0.94,
-      "bbox": {
-        "x1": 120,
-        "y1": 80,
-        "x2": 260,
-        "y2": 210
-      }
-    }
-  ]
-}
-```
-
-*The response above is illustrative, not a measured result. Actual classes, confidence scores, coordinates, and inference times depend on your trained model and hardware.*
 
 ## 🔄 Working Process
 
@@ -275,16 +135,6 @@ Keep both the frontend and backend running during local testing.
 6. The backend extracts defect classes, confidence scores, and bounding boxes.
 7. The system generates an annotated image.
 8. The frontend displays the inspection results.
-
-## 🧪 Testing
-
-1. Start the backend and frontend.
-2. Open the dashboard in your browser.
-3. Upload a supported industrial image.
-4. Click **Detect Defects**.
-5. Review the detection count, defect classes, confidence scores, bounding boxes, and annotated image.
-
-For direct API testing, use the Swagger documentation at `http://127.0.0.1:8000/docs`.
 
 ## 📌 Applications
 
@@ -314,15 +164,3 @@ For direct API testing, use the Swagger documentation at `http://127.0.0.1:8000/
 - Confidence scores are model estimates, not guarantees of correctness.
 - Real-time production performance depends on the hardware and deployment environment.
 
-## 👥 Contributors
-
-Add the names of your project team members here.
-
-## 📄 License
-
-This project is intended for educational and research purposes. Add an appropriate open-source license before distributing the repository.
-
----
-
-**AI-Based Real-Time Industrial Defect Detection**  
-*Automating quality inspection through Computer Vision and Deep Learning.*
